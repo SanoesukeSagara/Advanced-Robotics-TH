@@ -9,12 +9,14 @@ Use the checkboxes to subscribe/unsubscribe at runtime and watch what happens.
 """
 
 import tkinter as tk
+from turtle import distance
 
 from topic import Topic
 
 CANVAS_W, CANVAS_H = 640, 160
 ROBOT_R = 20          # robot radius [px]
 SAFE_DISTANCE = 60    # desired gap to the wall [px]
+WARNING_DISTANCE = 30  # distance to wall to trigger warning [px]
 MAX_SPEED = 150       # [px/s]
 GAIN = 2.0            # P-controller gain [1/s]
 DT = 0.05             # simulation step [s] -> 20 Hz
@@ -22,6 +24,7 @@ DT = 0.05             # simulation step [s] -> 20 Hz
 # --- Topics (the subjects) -------------------------------------------------
 scan_topic = Topic("/scan")         # msg: distance to wall [px]
 cmd_vel_topic = Topic("/cmd_vel")   # msg: velocity command [px/s]
+battery_topic = Topic("/battery")     # msg: battery level [%]
 
 robot = {"x": 60.0, "v": 0.0, "crashed": False}
 
@@ -40,6 +43,8 @@ def controller_callback(distance):
     v = max(-MAX_SPEED, min(MAX_SPEED, v))
     cmd_vel_topic.publish(v)
 
+
+
 def main():
     root = tk.Tk()
     root.title("Observer pattern / ROS2 pub-sub demo")
@@ -55,6 +60,8 @@ def main():
     panel.pack(fill="x", padx=10)
     info = tk.Label(root, font=("Consolas", 10), justify="left")
     info.pack(anchor="w", padx=10)
+    warning_label = tk.Label(root, font=("Consolas", 10), justify="right", fg="red")
+    warning_label.pack(anchor="w", padx=10)
 
     log = tk.Text(root, height=10, width=80, font=("Consolas", 9))
     log.pack(padx=10, pady=10)
@@ -72,7 +79,14 @@ def main():
         info.config(text="subscribers: {} -> {}   /   {} -> {}".format(
             scan_topic.name, scan_topic.subscriber_count(),
             cmd_vel_topic.name, cmd_vel_topic.subscriber_count()))
-
+        
+    def warning_callback(distance):
+        """Warning node: subscribes to /scan and prints a warning if too close."""
+        if distance < WARNING_DISTANCE:
+            warning_label.config(text="WARNING: Too close to the wall!") 
+        else:
+            warning_label.config(text="") 
+        
     def add_subscription_checkbox(text, topic, callback, enabled=True):
         var = tk.BooleanVar(value=enabled)
 
@@ -88,6 +102,7 @@ def main():
 
     add_subscription_checkbox("controller ← /scan", scan_topic, controller_callback)
     add_subscription_checkbox("motor ← /cmd_vel", cmd_vel_topic, motor_callback)
+    add_subscription_checkbox("warning ← /scan", scan_topic, warning_callback)
     add_subscription_checkbox("echo /scan", scan_topic, echo(scan_topic), enabled=False)
     add_subscription_checkbox("echo /cmd_vel", cmd_vel_topic, echo(cmd_vel_topic), enabled=False)
 
