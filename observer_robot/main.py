@@ -184,4 +184,5 @@ if __name__ == "__main__":
 
 #Task 3 Why does `publish` iterate over `list(self._callbacks)` instead of `self._callbacks`? 
 # The `publish` method iterates over `list(self._callbacks)` instead of iterating over 
-# `self._callbacks` to avoid problems  that can occur if the list of `self._callbacks` is modified while `publish` is iterating over it.
+# `self._callbacks` to avoid problems  that can occur if the list of `self._callbacks` is modified while `publish` is iterating over it meaning 
+# that some callbacks might be skipped or called multiple times.
