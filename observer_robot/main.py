@@ -33,7 +33,10 @@ robot = {"x": 60.0, "v": 0.0, "crashed": False, "battery": 100.0}  # robot state
 # ---- Robot node: subscribes to /cmd_vel and sets its wheel speed ---------
 def motor_callback(v):
     """Robot node: subscribes to /cmd_vel and sets its wheel speed."""
-    robot["v"] = v
+    if robot["battery"] <= 0.0:
+        robot["v"] = 0.0
+    else:
+        robot["v"] = v
 
 # --- Controller node: subscribes to /scan and publishes to /cmd_vel ---------    
 def controller_callback(distance):
@@ -61,7 +64,7 @@ def main():
     warning_label = tk.Label(panel, font=("Consolas", 10), justify="right", fg="red")
     warning_label.pack(anchor="w", padx=10)
 
-    battery_label = tk.Label(panel, font=("Consolas", 10), justify="left", fg="blue")
+    battery_label = tk.Label(panel, font=("Consolas", 10), justify="left", fg="green")
     battery_label.pack(anchor="e", padx=10)
     #log = tk.Text(root, height=10, width=80, font=("Consolas", 9))
     #log.pack(padx=10, pady=10)
@@ -99,7 +102,7 @@ def main():
 
     def battery_callback(level):
         """Battery node: subscribes to /battery and prints the battery level."""
-        battery_label.config(text="Battery level: {}%".format(level))
+        battery_label.config(text="Battery level: {:.2f}%".format(level))
         
     def add_subscription_checkbox(text, topic, callback, enabled=True):
         var = tk.BooleanVar(value=enabled)
@@ -140,11 +143,26 @@ def main():
         canvas.create_oval(x - ROBOT_R, y - ROBOT_R, x + ROBOT_R, y + ROBOT_R, fill=color)
         canvas.create_text(x, y - ROBOT_R - 12, text="v = {:.0f} px/s".format(robot["v"]))
         if robot["crashed"]:
-            canvas.create_text(CANVAS_W / 2, 20, text="CRASH !!!", fill="red", font=("Arial", 16, "bold"))
-
+            canvas.create_text(CANVAS_W / 2, 20, text="CRASH !!!", fill="orange", font=("Arial", 16, "bold"))
+        elif robot["battery"] <= 0.0:
+            canvas.create_text(CANVAS_W / 2, 20, text="Battery empty!", fill="orange", font=("Arial", 16, "bold"))
     def tick():
         """Timer callback: sensor node publishes, then the physics moves the robot."""
         w = wall_x.get()
+
+        #Battery Drain Simulation
+        if robot["battery"] > 0.0:
+            idle_drain = 0.01  # battery drain per tick when idle
+            sensor_drain = 0.02  # battery drain per tick when moving
+
+            # Drain calculation based on robot's velocity
+            movement_drain = 0.005 * abs(robot["v"])  # battery drain proportional to speed
+            robot["battery"] -= (idle_drain + sensor_drain + movement_drain)
+            robot["battery"] = max(0.0, robot["battery"])  # Ensure battery doesn't go below 0
+
+        if robot["battery"] <= 0.0:
+            robot["v"] = 0.0  # Stop the robot if battery is empty
+
         scan_topic.publish(w - robot["x"] - ROBOT_R)   # sensor node (publisher)
         battery_topic.publish(robot["battery"])
 
