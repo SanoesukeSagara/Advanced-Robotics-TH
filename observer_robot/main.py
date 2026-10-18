@@ -156,7 +156,7 @@ def main():
             sensor_drain = 0.02  # battery drain per tick when moving
 
             # Drain calculation based on robot's velocity
-            movement_drain = 0.005 * abs(robot["v"])  # battery drain proportional to speed
+            movement_drain = 0.0010 * abs(robot["v"])  # battery drain proportional to speed
             robot["battery"] -= (idle_drain + sensor_drain + movement_drain)
             robot["battery"] = max(0.0, robot["battery"])  # Ensure battery doesn't go below 0
 
@@ -181,3 +181,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+#Task 3 Why does `publish` iterate over `list(self._callbacks)` instead of `self._callbacks`? 
+# The `publish` method iterates over `list(self._callbacks)` instead of iterating over 
+# `self._callbacks` to avoid problems  that can occur if the list of `self._callbacks` is modified while `publish` is iterating over it.
