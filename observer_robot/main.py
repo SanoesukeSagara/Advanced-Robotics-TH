@@ -96,7 +96,7 @@ def main():
     def warning_callback(distance):
         """Warning node: subscribes to /scan and prints a warning if too close."""
         if distance < WARNING_DISTANCE:
-            warning_label.config(text="WARNING: Too close to the wall!") 
+            warning_label.config(text="WARNING !!! Distance less than {} px".format(WARNING_DISTANCE)) 
         else:
             warning_label.config(text="") 
 
