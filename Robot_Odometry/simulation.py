@@ -1,13 +1,20 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-
+#Define Robot simulation parameters
 v_left = 0.15
 v_right = 0.25
-wheel_radius = 0.03
+wheel_radius = 0.030
+wheel_radius_odom = 0.031
+# Define a small noise standard deviation in radians.
+noise_std_dev = 0.001  # radians  
 wheel_base = 0.20
 total_time = 12.57  # Total simulation time in seconds
 dt = 0.01  # Time step in seconds
+
+#Apply random seed for reproducibility
+SEED = 22  # Set to None for random seed, or set to an integer for reproducibility
+rng = np.random.default_rng(SEED)
 
 def calculate_velocity(v_left, v_right, wheel_base):
     v = (v_left + v_right) / 2
@@ -101,7 +108,7 @@ def update_odometry_pose(x, y, theta, delta_s, delta_theta):
     # Step 5: Return all three updated values
     return new_x, new_y, new_theta
 
-def simulate_odometry(v_left, v_right, wheel_radius, wheel_base, dt, total_time):
+def simulate_odometry(v_left, v_right, wheel_radius, wheel_base, dt, total_time, wheel_radius_odom, noise_std_dev):
     # Initialize the ground-truth pose
     x_true, y_true, theta_true = 0.0, 0.0, 0.0
     # Initialize the odometry-estimated pose
@@ -121,6 +128,7 @@ def simulate_odometry(v_left, v_right, wheel_radius, wheel_base, dt, total_time)
 
     # Calculate linear and angular velocities
     v, omega = calculate_velocity(v_left, v_right, wheel_base)
+  
     # Run the simulation loop
     for i in range(time_steps):
         # Update ground truth using wheel velocities
@@ -132,8 +140,22 @@ def simulate_odometry(v_left, v_right, wheel_radius, wheel_base, dt, total_time)
         # Calculate wheel displacements
         delta_phi_left = v_left * dt / wheel_radius
         delta_phi_right = v_right * dt / wheel_radius
-        # Calculate odometry
-        delta_s, delta_theta = calculate_odometry(delta_phi_left, delta_phi_right, wheel_radius, wheel_base)
+
+
+        # Generate a random noise value for the left wheel.
+        noise_left = rng.normal(0, noise_std_dev)
+        # Generate a random noise value for the right wheel.    
+        noise_right = rng.normal(0, noise_std_dev)
+        # Add the left noise value to delta_phi_left.
+        delta_phi_left_measured = delta_phi_left + noise_left
+        # Add the right noise value to delta_phi_right.
+        delta_phi_right_measured = delta_phi_right + noise_right
+
+        # MEASURED angular displacements simulate simplified measurement noise.
+        # into calculate_odometry().
+        delta_s, delta_theta = calculate_odometry(delta_phi_left_measured, delta_phi_right_measured, wheel_radius_odom, wheel_base)
+        # Calculate odometry ideal values without noise for comparison
+        # delta_s, delta_theta = calculate_odometry(delta_phi_left, delta_phi_right, wheel_radius, wheel_base)
         # Update odometry pose
         x_odom, y_odom, theta_odom = update_odometry_pose(x_odom, y_odom, theta_odom, delta_s, delta_theta)
         x_odom_history.append(x_odom)
@@ -157,27 +179,84 @@ def calculate_position_error(x_true_history, y_true_history, x_odom_history, y_o
     total_pose_error = np.sqrt(x_pose_error**2 + y_pose_error**2)
     return total_pose_error
 
-x_true_history, y_true_history, theta_true_history, x_odom_history, y_odom_history, theta_odom_history = simulate_odometry(v_left, v_right, wheel_radius, wheel_base, dt, total_time)
+def calculate_heading_error(theta_true_history, theta_odom_history):
+
+    # Convert both heading-history lists into NumPy arrays.
+    theta_true_array = np.array(theta_true_history)
+    theta_odom_array = np.array(theta_odom_history)
+    
+    # Calculate the difference between the true
+    # and estimated heading at every time step.
+    heading_error = theta_true_array - theta_odom_array
+    # Normalize the heading differences to the
+    # interval [-pi, pi] using:
+    # np.arctan2(np.sin(error), np.cos(error))
+    normalized_heading_error = np.arctan2(np.sin(heading_error), np.cos(heading_error))
+    # Return the normalized heading-error array.
+    return normalized_heading_error
+
+        #####Functions for controll action #######
+def calculate_heading_control(theta_target, theta_odom, Kp):
+    # Calculate the signed difference between the target
+    # heading and the estimated heading.
+    theta_error = theta_target - theta_odom
+    
+    # Normalize the heading difference to [-pi, pi].
+    # Hint: Use np.arctan2(), np.sin(), and np.cos().
+    normalized_error = np.arctan2(np.sin(theta_error), np.cos(theta_error))
+   
+    # Calculate the commanded angular velocity:
+    # omega_command = Kp * normalized_error
+    omega_command = Kp * normalized_error
+   
+    # Return omega_command.
+    return omega_command
+
+def calculate_wheel_velocities(v_command, omega_command, wheel_base):
+    # STEP 1:
+    # Calculate the left wheel velocity from
+    # v_command, omega_command, and wheel_base.
+    v_left = v_command - (omega_command * wheel_base / 2)
+    # STEP 2:
+    # Calculate the right wheel velocity.
+    v_right = v_command + (omega_command * wheel_base / 2)
+    # STEP 3:
+    # Return both wheel velocities.
+    return v_left, v_right
+
+x_true_history, y_true_history, theta_true_history, x_odom_history, y_odom_history, theta_odom_history = simulate_odometry(v_left, v_right, wheel_radius, wheel_base, dt, total_time, wheel_radius_odom, noise_std_dev)
 
 position_error = calculate_position_error(x_true_history, y_true_history, x_odom_history, y_odom_history)
+normalized_heading_error = calculate_heading_error(theta_true_history, theta_odom_history)
+
 max_error = np.max(position_error)
 final_error = position_error[-1]
-# print("Maximum Position Error:", max_error, "m")
-# print("Final Position Error:", final_error, "m")
+max_absolute_heading_error = np.max(np.abs(normalized_heading_error))
+final_absolute_heading_error = np.abs(normalized_heading_error[-1])
+
+max_error_millimeters = max_error * 1000
+final_error_millimeters = final_error * 1000
+# print("Maximum Position Error:", max_error_millimeters, "mm")
+# print("Final Position Error:", final_error_millimeters, "mm")
+# print("Maximum Absolute Heading Error:", np.rad2deg(max_absolute_heading_error), "degrees")
+# print("Final Absolute Heading Error:", np.rad2deg(final_absolute_heading_error), "degrees")
 time_history = np.arange(len(position_error)) * dt
 position_error_millimeters = position_error * 1000
 
-fig = plt.figure(figsize=(10, 6))
-plt.plot(time_history, position_error_millimeters, label='Position Error', color='red', linestyle='-.')
-plt.title("Robot Position Error Over Time")
-plt.xlabel("Time (s)")
-plt.ylabel("Position Error (mm)")
-plt.legend()
-plt.grid(True)
-plt.show()
-
-
-
+###########Control Action Simulation ##########
+# omega_command = calculate_heading_control(np.deg2rad(179), np.deg2rad(-179), 2.0)
+# print("Commanded angular velocity:", omega_command, "rad/s")
+v_left_command, v_right_command = calculate_wheel_velocities(0, omega_command = 1.0, wheel_base=0.2)
+print("Commanded left wheel velocity:", v_left_command, "m/s")
+print("Commanded right wheel velocity:", v_right_command, "m/s")
+# fig = plt.figure(figsize=(10, 6))
+# plt.plot(time_history, position_error_millimeters, label='Position Error', color='red', linestyle='-.')
+# plt.title("Robot Position Error Over Time")
+# plt.xlabel("Time (s)")
+# plt.ylabel("Position Error (mm)")
+# plt.legend()
+# plt.grid(True)
+# plt.show()
 
 # fig = plt.figure(figsize=(10, 6))
 # plt.plot(x_true_history, y_true_history, label='Ground Truth', color='blue')
