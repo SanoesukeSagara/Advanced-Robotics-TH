@@ -62,7 +62,7 @@ def main():
     info = tk.Label(root, font=("Consolas", 10), justify="left")
     info.pack(anchor="w", padx=10)
     warning_label = tk.Label(panel, font=("Consolas", 10), justify="right", fg="red")
-    warning_label.pack(anchor="w", padx=10)
+    warning_label.pack(anchor="center", padx=10)
 
     battery_label = tk.Label(panel, font=("Consolas", 10), justify="left", fg="green")
     battery_label.pack(anchor="e", padx=10)
